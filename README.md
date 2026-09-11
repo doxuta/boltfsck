@@ -150,7 +150,7 @@ go test ./...                    all pass
 go test -race ./...              clean
 go vet ./...                     clean
 statement coverage (library)     88.3%
-go test -fuzz=FuzzCheckBytes     1.4M execs, 0 failures
+go test -fuzz=FuzzCheckBytes     30s from a cold cache: 1.74M execs, 0 failures
 mutation check                   8 hand-written defects, 8 caught by the suite
 ```
 
