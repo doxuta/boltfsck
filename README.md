@@ -168,12 +168,14 @@ library imports nothing outside the standard library, and a test asserts it — 
   [boltdb/bolt](https://github.com/boltdb/bolt) by Ben Johnson. The on-disk format is
   theirs; this tool only reads it. bbolt's `internal/common` package is where the layout
   mirrored in `page.go` and `meta.go` comes from.
-- The problem is a live one upstream: [bbolt#581](https://github.com/etcd-io/bbolt/issues/581),
-  filed by maintainer `ahrtr` in October 2023 and labelled `priority/important`, asks that
-  "the check command doesn't panic". [bbolt#877](https://github.com/etcd-io/bbolt/issues/877)
-  is an etcd snapshot-status hang on a corrupted file, and
-  [bbolt#1257](https://github.com/etcd-io/bbolt/issues/1257) covers cyclic branch references.
-  Upstream work on those is ongoing and welcome; it does not remove the structural
+- The problem is a live one upstream. [bbolt#581](https://github.com/etcd-io/bbolt/issues/581)
+  "Ensure the check command do not panic" was filed by maintainer `ahrtr` on 2023-10-18 and
+  carries `priority/important` and `stage/tracked`; it is still open.
+  [bbolt#877](https://github.com/etcd-io/bbolt/issues/877) "Check of corrupted file deadlocks"
+  was filed by `serathius` on 2024-12-20 and is labelled `area/corruption`.
+  [bbolt#1257](https://github.com/etcd-io/bbolt/issues/1257) "`Tx.Check` can hang or
+  dereference invalid pages when branch references are corrupt" was filed on 2026-08-14.
+  Upstream work on all three is ongoing and welcome; none of it removes the structural
   reason for a reader that does not share bbolt's loader.
 - `bbolt check`, `bbolt page`, and `bbolt surgery` remain the right tools for a file
   bbolt can open.
