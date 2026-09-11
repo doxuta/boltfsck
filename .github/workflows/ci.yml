@@ -1,0 +1,66 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # 'stable' rather than go-version-file: go.mod, which pins to the
+          # minimum patch release and makes govulncheck fail on stdlib CVEs.
+          go-version: 'stable'
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "not gofmt'd:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: vet
+        run: go vet ./...
+
+      - name: build
+        run: go build ./...
+
+      - name: test
+        run: go test ./...
+
+      - name: race
+        run: go test -race ./...
+
+      - name: fuzz smoke
+        # Scoped to the root package: go test -fuzz refuses more than one
+        # package, and this module also has cmd/boltfsck.
+        run: go test -fuzz=FuzzCheckBytes -fuzztime=30s .
+
+      - name: fixtures are reproducible
+        # The checked-in testdata must be exactly what gen_testdata.go emits,
+        # so the numbers in the README always describe the files in the repo.
+        run: |
+          go run gen_testdata.go
+          git diff --exit-code -- testdata/
+
+  vulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - run: govulncheck ./...
