@@ -1,6 +1,11 @@
 package boltfsck
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"fmt"
+	"math"
+	"math/bits"
+)
 
 // maxDepth bounds recursion so a hostile chain of pages cannot exhaust the
 // goroutine stack. Real bbolt trees are a handful of levels deep.
@@ -26,10 +31,10 @@ type walker struct {
 }
 
 func check(src source, opts Options) *Report {
-	rep := &Report{MetaUsed: -1, PageSizeSource: -1, FileSize: src.Size()}
+	rep := &Report{MetaUsed: -1, PageSizeSource: -2, FileSize: src.Size()}
 
 	ps := opts.PageSize
-	if ps == 0 {
+	if ps <= 0 { // zero means discover; a negative override would wrap every offset below
 		ps, rep.PageSizeSource = discoverPageSize(src)
 	}
 	if ps == 0 {
@@ -75,11 +80,17 @@ func check(src source, opts Options) *Report {
 	// A page inside the high-water mark but past the end of the file is the
 	// case that faults bbolt rather than erroring: the offset is validated
 	// against the meta page, but the memory is not there.
-	want := int64(m.HighWater) * int64(ps)
-	if m.HighWater > 0 && src.Size() < want {
-		rep.add(Truncated, uint64(src.Size()/int64(ps)), nil,
-			"file is %d bytes but meta %d declares %d pages (%d bytes); pages from %d up are missing",
-			src.Size(), use, m.HighWater, want, src.Size()/int64(ps))
+	//
+	// Compare in pages: HighWater*ps overflows int64 for a hostile HighWater,
+	// which would hide the truncation and let every page offset below wrap.
+	if have := uint64(src.Size()) / uint64(ps); m.HighWater > have {
+		want := "more bytes than fit in 64 bits"
+		if hi, lo := bits.Mul64(m.HighWater, uint64(ps)); hi == 0 {
+			want = fmt.Sprintf("%d bytes", lo)
+		}
+		rep.add(Truncated, have, nil,
+			"file is %d bytes but meta %d declares %d pages (%s); pages from %d up are missing",
+			src.Size(), use, m.HighWater, want, have)
 	}
 
 	budget := opts.Budget
@@ -127,6 +138,12 @@ func reportMeta(rep *Report, n int, m meta, h pageHeader) {
 // largest prefix it could actually read, so a truncated page is still
 // inspectable rather than fatal.
 func (w *walker) readSpan(pgid uint64, stack []uint64) ([]byte, pageHeader, bool) {
+	// pgid*ps overflows int64 for a hostile pgid and would alias a lower page.
+	if pgid > math.MaxInt64/uint64(w.ps) {
+		w.rep.add(Truncated, pgid, stack,
+			"page offset %d*%d does not fit in 64 bits; no file can contain it", pgid, w.ps)
+		return nil, pageHeader{}, false
+	}
 	off := int64(pgid) * w.ps
 	if off < 0 || off+pageHeaderSize > w.src.Size() {
 		w.rep.add(Truncated, pgid, stack,

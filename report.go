@@ -97,8 +97,8 @@ type Report struct {
 	// PageSize is the page size the file was read with.
 	PageSize int
 	// PageSizeSource records where PageSize came from: 0 or 1 for the meta
-	// page it was read from, and -1 when it was guessed because no meta page
-	// validated.
+	// page it was read from, -1 when it was guessed because no meta page
+	// validated, and -2 when Options.PageSize supplied it.
 	PageSizeSource int
 	// MetaUsed is the meta page the walk was rooted at, or -1 if neither meta
 	// page was usable.
@@ -168,6 +168,8 @@ func (r *Report) String() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "page size:     %d", r.PageSize)
 	switch r.PageSizeSource {
+	case -2:
+		b.WriteString(" (from Options.PageSize)\n")
 	case -1:
 		b.WriteString(" (guessed; no meta page validated)\n")
 	default:

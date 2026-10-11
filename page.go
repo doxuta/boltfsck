@@ -167,8 +167,10 @@ func freelistIDs(page []byte, h pageHeader) (ids []uint64, declared uint64, ok b
 		idx = 1
 	}
 	declared = count
-	need := (uint64(idx) + count) * 8
-	if need > uint64(len(page)-pageHeaderSize) {
+	// Compare in slots, not bytes: (idx+count)*8 wraps for a hostile count and
+	// would pass this check, and make() below would then panic on the cap.
+	slots := uint64(len(page)-pageHeaderSize) / 8
+	if count > slots-uint64(idx) {
 		return nil, declared, false
 	}
 	ids = make([]uint64, 0, count)
